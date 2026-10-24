@@ -9,12 +9,16 @@ class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         val kind = i.getStringExtra("kind") ?: return
         var title = i.getStringExtra("title") ?: "Alarm"
+        var sound = i.getStringExtra("sound") ?: ""
+        var vibrate = i.getBooleanExtra("vibrate", true)
         when (kind) {
             "alarm" -> {
                 val id = i.getIntExtra("id", 0)
                 val list = AlarmStore.load(c)
                 val a = list.find { it.id == id } ?: return
                 title = a.label.ifBlank { "Alarm" }
+                sound = a.sound.ifBlank { Prefs.alarmSound(c) }
+                vibrate = Prefs.alarmVibrate(c)
                 if (a.days == 0) {
                     // one-time alarm: switch it off after it rings
                     AlarmStore.save(c, list.map { if (it.id == id) it.copy(enabled = false) else it })
@@ -22,9 +26,17 @@ class AlarmReceiver : BroadcastReceiver() {
                     Scheduler.schedule(c, a) // repeating: queue the next occurrence
                 }
             }
-            "timer" -> title = "Timer finished"
+            "timer" -> {
+                title = "Timer finished"
+                sound = Prefs.timerSound(c)
+                vibrate = Prefs.timerVibrate(c)
+            }
         }
-        ContextCompat.startForegroundService(c, Intent(c, RingService::class.java).putExtra("title", title))
+        ContextCompat.startForegroundService(
+            c,
+            Intent(c, RingService::class.java)
+                .putExtra("title", title).putExtra("sound", sound).putExtra("vibrate", vibrate),
+        )
     }
 }
 

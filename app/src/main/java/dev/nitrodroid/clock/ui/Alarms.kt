@@ -7,18 +7,22 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.nitrodroid.clock.Alarm
 import dev.nitrodroid.clock.AlarmStore
+import dev.nitrodroid.clock.Prefs
 import dev.nitrodroid.clock.Scheduler
 import java.time.DayOfWeek
 import java.time.LocalTime
@@ -39,15 +43,16 @@ fun AlarmsScreen() {
     Box(Modifier.fillMaxSize()) {
         if (alarms.isEmpty()) {
             Text(
-                "No alarms yet. Tap New alarm to add one.",
-                Modifier.align(Alignment.Center).padding(32.dp),
-                style = MaterialTheme.typography.titleMedium,
+                "No alarms",
+                Modifier.align(Alignment.Center),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 104.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 128.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(alarms, key = { it.id }) { a ->
                 AlarmCard(
@@ -61,12 +66,11 @@ fun AlarmsScreen() {
                 )
             }
         }
-        ExtendedFloatingActionButton(
+        LargeFloatingActionButton(
             onClick = { val t = LocalTime.now(); editing = Alarm(0, t.hour, t.minute) },
-            icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-            text = { Text("New alarm") },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        )
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
+        ) { Icon(Icons.Rounded.Add, contentDescription = "New alarm", modifier = Modifier.size(36.dp)) }
     }
 
     editing?.let { a ->
@@ -92,31 +96,38 @@ fun AlarmsScreen() {
 
 @Composable
 private fun AlarmCard(a: Alarm, onToggle: (Boolean) -> Unit, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
+    val cs = MaterialTheme.colorScheme
+    val (main, suffix) = timeParts(a.hour, a.minute, DateFormat.is24HourFormat(LocalContext.current))
     Card(
         onClick = onClick,
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = if (a.enabled) colors.primaryContainer else colors.surfaceContainerHigh),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = cs.surfaceContainer),
     ) {
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 18.dp, bottom = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Column(Modifier.weight(1f)) {
-                Text(formatTime(a.hour, a.minute), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    listOf(a.label.ifBlank { "Alarm" }, describeDays(a.days)).joinToString(" · "),
-                    style = MaterialTheme.typography.bodyLarge,
+                    listOf(a.label, describeDays(a.days)).filter { it.isNotBlank() }.joinToString(" · "),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = cs.onSurfaceVariant,
                 )
+                TimeText(main, suffix, 56.sp, color = if (a.enabled) cs.onSurface else cs.onSurfaceVariant)
             }
             Switch(checked = a.enabled, onCheckedChange = onToggle)
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AlarmEditor(a: Alarm, onDismiss: () -> Unit, onDelete: () -> Unit, onSave: (Alarm) -> Unit) {
-    val picker = rememberTimePickerState(a.hour, a.minute, DateFormat.is24HourFormat(LocalContext.current))
+    val ctx = LocalContext.current
+    val picker = rememberTimePickerState(a.hour, a.minute, DateFormat.is24HourFormat(ctx))
     var label by remember { mutableStateOf(a.label) }
     var days by remember { mutableIntStateOf(a.days) }
+    var sound by remember { mutableStateOf(a.sound) }
+    val pickSound = rememberSoundPicker(sound.ifBlank { Prefs.alarmSound(ctx) }) { sound = it }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -138,11 +149,20 @@ private fun AlarmEditor(a: Alarm, onDismiss: () -> Unit, onDelete: () -> Unit, o
                         )
                     }
                 }
+                FilledTonalButton(onClick = pickSound) {
+                    Icon(Icons.Rounded.MusicNote, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        soundName(ctx, sound.ifBlank { Prefs.alarmSound(ctx) }),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                onSave(a.copy(hour = picker.hour, minute = picker.minute, label = label.trim(), days = days))
+                onSave(a.copy(hour = picker.hour, minute = picker.minute, label = label.trim(), days = days, sound = sound))
             }) { Text("Save") }
         },
         dismissButton = {

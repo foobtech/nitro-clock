@@ -1,6 +1,6 @@
 # Nitro Clock
 
-Alarms, world clock, timer and stopwatch for NitroDroid. Jetpack Compose, Material 3 Expressive theme
+Alarms, world clock, timer and stopwatch for NitroDroid. Jetpack Compose, Material 3 theme in Nitro blue
 (Material You colors on Android 12+). No Google services, no trackers, no network permission.
 
 Package: `dev.nitrodroid.clock` · min Android 9 (API 28) · target API 36
@@ -38,10 +38,11 @@ servers; download it from the Actions tab (run > Artifacts > NitroClock-debug-ap
 ## Known limits in v0.1
 
 - Not yet built or tested by the author; expect to fix a compile error or two on first sync.
-- Alarm sound is the system default alarm tone (no sound picker yet).
+- Alarm and timer sounds come from the system sound picker (Settings, or per alarm in the alarm editor).
 - Stopwatch resets if Android kills the app.
 - No bedtime reminders, gradual volume or per-alarm snooze length yet.
-- Expressive theme only; expressive components (button groups, wavy progress) come later.
+- Standard Material 3 with a fixed Nitro blue palette (Material You colors are optional in Settings). Material 3 Expressive comes later.
+- Silence-after, gradual volume, Bedtime tab and week-start option are not built yet.
 
 ## F-Droid checklist
 

@@ -9,7 +9,10 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
+import android.net.Uri
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.core.app.NotificationCompat
@@ -20,19 +23,29 @@ class RingService : Service() {
     companion object {
         const val ACTION_DISMISS = "dev.nitrodroid.clock.DISMISS"
         const val ACTION_SNOOZE = "dev.nitrodroid.clock.SNOOZE"
-        const val SNOOZE_MINUTES = 10
         private const val CHANNEL = "ring"
         val ringing = MutableStateFlow(false)
     }
 
     private var ringtone: Ringtone? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val attrs = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ALARM)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val title = intent?.getStringExtra("title") ?: "Alarm"
+        val sound = intent?.getStringExtra("sound") ?: ""
+        val vibrate = intent?.getBooleanExtra("vibrate", true) ?: true
         when (intent?.action) {
-            ACTION_SNOOZE -> { Scheduler.snooze(this, SNOOZE_MINUTES, title); finishRinging(); return START_NOT_STICKY }
+            ACTION_SNOOZE -> {
+                Scheduler.snooze(this, Prefs.snoozeMin(this), title, sound, vibrate)
+                finishRinging()
+                return START_NOT_STICKY
+            }
             ACTION_DISMISS -> { finishRinging(); return START_NOT_STICKY }
         }
 
@@ -41,12 +54,21 @@ class RingService : Service() {
             NotificationChannel(CHANNEL, "Alarms and timers", NotificationManager.IMPORTANCE_HIGH)
                 .apply { setSound(null, null) }
         )
-        val flagsPi = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        val open = PendingIntent.getActivity(this, 0, Intent(this, RingActivity::class.java).putExtra("title", title), flagsPi)
-        val dismiss = PendingIntent.getService(this, 1, Intent(this, RingService::class.java).setAction(ACTION_DISMISS), flagsPi)
+        val f = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val open = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, RingActivity::class.java)
+                .putExtra("title", title).putExtra("sound", sound).putExtra("vibrate", vibrate),
+            f,
+        )
+        val dismiss = PendingIntent.getService(
+            this, 1, Intent(this, RingService::class.java).setAction(ACTION_DISMISS), f
+        )
         val snooze = PendingIntent.getService(
             this, 2,
-            Intent(this, RingService::class.java).setAction(ACTION_SNOOZE).putExtra("title", title), flagsPi
+            Intent(this, RingService::class.java).setAction(ACTION_SNOOZE)
+                .putExtra("title", title).putExtra("sound", sound).putExtra("vibrate", vibrate),
+            f,
         )
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_nitro)
@@ -63,27 +85,42 @@ class RingService : Service() {
         ServiceCompat.startForeground(this, 1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
 
         ringing.value = true
-        startRinging()
+        startRinging(sound, vibrate)
         return START_NOT_STICKY
     }
 
-    private fun startRinging() {
-        stopRinging()
-        val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        ringtone = RingtoneManager.getRingtone(this, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))?.apply {
+    private fun play(sound: String): Ringtone? = try {
+        val uri = if (sound.isBlank()) RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) else Uri.parse(sound)
+        RingtoneManager.getRingtone(this, uri)?.apply {
             audioAttributes = attrs
             isLooping = true
             play()
         }
-        @Suppress("DEPRECATION")
-        getSystemService(Vibrator::class.java)
-            ?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 700, 500), 0), attrs)
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun startRinging(sound: String, vibrate: Boolean) {
+        stopRinging()
+        ringtone = play(sound)
+        if (sound.isNotBlank()) {
+            // If the chosen sound can't be played (missing file, no permission), fall back to the default tone.
+            handler.postDelayed({
+                if (ringtone?.isPlaying != true) {
+                    ringtone?.stop()
+                    ringtone = play("")
+                }
+            }, 1200)
+        }
+        if (vibrate) {
+            @Suppress("DEPRECATION")
+            getSystemService(Vibrator::class.java)
+                ?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 700, 500), 0), attrs)
+        }
     }
 
     private fun stopRinging() {
+        handler.removeCallbacksAndMessages(null)
         ringtone?.stop()
         ringtone = null
         getSystemService(Vibrator::class.java)?.cancel()

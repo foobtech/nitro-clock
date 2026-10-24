@@ -14,8 +14,13 @@ object Scheduler {
     private const val TIMER_CODE = 0
     private const val SNOOZE_CODE = 100000
 
-    private fun fire(c: Context, code: Int, kind: String, id: Int = 0, title: String? = null): PendingIntent {
-        val i = Intent(c, AlarmReceiver::class.java).putExtra("kind", kind).putExtra("id", id)
+    private fun fire(
+        c: Context, code: Int, kind: String, id: Int = 0,
+        title: String? = null, sound: String = "", vibrate: Boolean = true,
+    ): PendingIntent {
+        val i = Intent(c, AlarmReceiver::class.java)
+            .putExtra("kind", kind).putExtra("id", id)
+            .putExtra("sound", sound).putExtra("vibrate", vibrate)
         if (title != null) i.putExtra("title", title)
         return PendingIntent.getBroadcast(c, code, i, FLAGS)
     }
@@ -39,6 +44,9 @@ object Scheduler {
     fun cancelTimer(c: Context) =
         c.getSystemService(AlarmManager::class.java).cancel(fire(c, TIMER_CODE, "timer"))
 
-    fun snooze(c: Context, minutes: Int, title: String) =
-        setClock(c, System.currentTimeMillis() + minutes * 60_000L, fire(c, SNOOZE_CODE, "snooze", 0, title))
+    fun snooze(c: Context, minutes: Int, title: String, sound: String, vibrate: Boolean) =
+        setClock(
+            c, System.currentTimeMillis() + minutes * 60_000L,
+            fire(c, SNOOZE_CODE, "snooze", 0, title, sound, vibrate),
+        )
 }
