@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-// Fallback palette for phones without Material You: electric orange from the Nitrobug icon.
 private val NitroLight = lightColorScheme(
     primary = Color(0xFFB83F00),
     secondary = Color(0xFF77574A),
@@ -19,7 +18,6 @@ private val NitroDark = darkColorScheme(
     tertiary = Color(0xFFD7C68D),
 )
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NitroClockTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val ctx = LocalContext.current
@@ -29,5 +27,5 @@ fun NitroClockTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable 
         dark -> NitroDark
         else -> NitroLight
     }
-    MaterialExpressiveTheme(colorScheme = scheme, motionScheme = MotionScheme.expressive(), content = content)
+    MaterialTheme(colorScheme = scheme, content = content)
 }
